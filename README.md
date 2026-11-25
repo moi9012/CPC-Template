@@ -1,0 +1,1 @@
+CPC-Contest useful template.
