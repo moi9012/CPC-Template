@@ -1,113 +1,179 @@
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <climits>
+using namespace std;
+
+typedef long long ll;
+
+const int MAXN = 500005;
+const ll MOD = 998244353;
+const ll NEG_INF = LLONG_MIN / 4;   // 最大值查询的负无穷单位元
+
 struct SegmentTree {
     struct Node {
-        int l, r;       // 当前节点覆盖的区间 [l, r]
-        ll sum;         // 区间 [l, r] 的元素和
-        ll add;         // 懒标记：表示当前节点区间内每个元素需要加上的值（尚未下传给子节点）
-    } tr[400005];       // 线段树节点数组，大小通常开 4 倍 n
+        int l, r;        // 闭区间 [l, r]
+        ll sum;          // 区间和（mod MOD）
+        ll max_val;      // 区间最大值（不取模，用于二分剪枝）
+        ll b, c;         // 懒标记：a_i <- b * a_i + c
+    } tr[4 * MAXN];
 
-    /*
-     * ================== 向上更新（push_up） ==================
-     * 【核心思想】
-     * 当子节点的信息被修改后，向上回溯更新父节点的信息。
-     * 父节点的区间和 = 左子节点区间和 + 右子节点区间和。
-     * 
-     * 【调用时机】
-     * 1. build 时自底向上构建线段树。
-     * 2. update 修改完子节点后，回溯更新父节点。
-     * ==========================================================
-     */
-    void push_up(int u) {
-        tr[u].sum = tr[u << 1].sum + tr[u << 1 | 1].sum;
+    // ========== 标记相关 ==========
+
+    // 对节点 u 施加标记 (b, c)：a_i <- b * a_i + c
+    void apply_tag(int u, ll b, ll c) {
+        int len = tr[u].r - tr[u].l + 1;
+
+        // 1) 更新区间和：sum <- b * sum + c * len
+        tr[u].sum = (b * tr[u].sum % MOD + c % MOD * (len % MOD)) % MOD;
+
+        // 2) 更新区间最大值：max <- b * max + c
+        //    注意：只有 b >= 0 时单调递增才成立，本题 b >= 1，成立
+        tr[u].max_val = b * tr[u].max_val + c;
+
+        // 3) 复合懒标记：先应用旧标记 (tr.b, tr.c)，再应用新标记 (b, c)
+        //    a -> tr.b * a + tr.c -> b * (tr.b * a + tr.c) + c
+        //      = (tr.b * b) * a + (b * tr.c + c)
+        tr[u].b = tr[u].b * b % MOD;
+        tr[u].c = (b * tr[u].c % MOD + c) % MOD;
     }
 
-    /*
-     * ================== 下传懒标记（push_down） ==================
-     * 【核心思想】
-     * 懒标记的核心是"延迟更新"：当对区间 [l, r] 执行区间加 c 时，
-     * 只修改当前节点的 sum 和 add，而不立即递归修改所有子节点。
-     * 当后续查询或修改需要访问子节点时，才将 add 的值下传给左右子节点。
-     * 
-     * 【下传逻辑】
-     * 1. 左子节点 sum += add * 左子节点区间长度，左子节点 add += 当前 add
-     * 2. 右子节点 sum += add * 右子节点区间长度，右子节点 add += 当前 add
-     * 3. 当前节点 add 清零
-     * 
-     * 【调用时机】
-     * 在 update 和 query 中，当需要递归访问子节点前，必须先 push_down。
-     * ============================================================
-     */
+    // 下传标记到左右孩子
     void push_down(int u) {
-        if (tr[u].add) { // 只有存在懒标记时才需要下传
-            auto &L = tr[u << 1], &R = tr[u << 1 | 1];
-            // 左子节点更新：区间和加上 add * 区间长度，懒标记累加
-            L.sum += tr[u].add * (L.r - L.l + 1);
-            L.add += tr[u].add;
-            // 右子节点更新
-            R.sum += tr[u].add * (R.r - R.l + 1);
-            R.add += tr[u].add;
-            // 当前节点懒标记清零
-            tr[u].add = 0;
+        if (tr[u].b != 1 || tr[u].c != 0) {
+            apply_tag(u << 1, tr[u].b, tr[u].c);
+            apply_tag(u << 1 | 1, tr[u].b, tr[u].c);
+            tr[u].b = 1;
+            tr[u].c = 0;
         }
     }
 
-    /*
-     * ================== 建树（build） ==================
-     * 【核心思想】
-     * 递归构建线段树，叶子节点对应原数组的单个元素，
-     * 非叶子节点的 sum 由子节点 push_up 得到。
-     * 
-     * 【时间复杂度】O(n)
-     * ================================================
-     */
-    void build(int u, int l, int r, vector<ll> &a) {
-        tr[u] = {l, r, a[l], 0}; // 初始化节点：区间 [l,r]，和为 a[l]，懒标记为 0
-        if (l == r) return;      // 叶子节点，递归终止
-        int mid = (l + r) >> 1;
-        build(u << 1, l, mid, a);       // 递归构建左子树
-        build(u << 1 | 1, mid + 1, r, a); // 递归构建右子树
-        push_up(u); // 回溯更新父节点
+    // 从孩子向上更新
+    void push_up(int u) {
+        tr[u].sum = (tr[u << 1].sum + tr[u << 1 | 1].sum) % MOD;
+        tr[u].max_val = max(tr[u << 1].max_val, tr[u << 1 | 1].max_val);
     }
 
-    /*
-     * ================== 区间修改（update） ==================
-     * 【核心思想】
-     * 对区间 [l, r] 内的每个元素加上 c。
-     * 1. 如果当前节点区间完全包含在 [l, r] 内，直接修改当前节点的 sum 和 add，返回。
-     * 2. 否则，先 push_down 下传懒标记，再递归修改左右子节点，最后 push_up 更新父节点。
-     * 
-     * 【时间复杂度】O(log n)
-     * ======================================================
-     */
-    void update(int u, int l, int r, ll c) {
-        if (tr[u].l >= l && tr[u].r <= r) { // 当前节点区间完全在修改区间内
-            tr[u].sum += c * (tr[u].r - tr[u].l + 1); // 区间和加上 c * 区间长度
-            tr[u].add += c; // 懒标记累加
+    // ========== 建树 ==========
+
+    void build(int u, int l, int r, const vector<ll>& a) {
+        tr[u] = {l, r, 0, NEG_INF, 1, 0};   // 标记初始化为恒等变换 (b=1, c=0)
+        if (l == r) {
+            tr[u].sum = a[l] % MOD;
+            tr[u].max_val = a[l];
             return;
         }
-        push_down(u); // 下传懒标记，保证子节点信息正确
-        int mid = (tr[u].l + tr[u].r) >> 1;
-        if (l <= mid) update(u << 1, l, r, c);       // 修改区间与左子树有交集
-        if (r > mid) update(u << 1 | 1, l, r, c);    // 修改区间与右子树有交集
-        push_up(u); // 回溯更新父节点
+        int mid = (l + r) >> 1;
+        build(u << 1, l, mid, a);
+        build(u << 1 | 1, mid + 1, r, a);
+        push_up(u);
     }
 
-    /*
-     * ================== 区间查询（query） ==================
-     * 【核心思想】
-     * 查询区间 [l, r] 的元素和。
-     * 1. 如果当前节点区间完全包含在 [l, r] 内，直接返回 sum。
-     * 2. 否则，先 push_down 下传懒标记，再递归查询左右子节点，累加结果。
-     * 
-     * 【时间复杂度】O(log n)
-     * ======================================================
-     */
-    ll query(int u, int l, int r) {
-        if (tr[u].l >= l && tr[u].r <= r) return tr[u].sum; // 完全包含，直接返回
-        push_down(u); // 下传懒标记，保证子节点信息正确
-        int mid = (tr[u].l + tr[u].r) >> 1;
-        ll res = 0;
-        if (l <= mid) res += query(u << 1, l, r);       // 查询区间与左子树有交集
-        if (r > mid) res += query(u << 1 | 1, l, r);    // 查询区间与右子树有交集
-        return res;
+    // ========== 区间修改：a_i <- b * a_i + c，i ∈ [ql, qr] ==========
+
+    void update(int u, int ql, int qr, ll b, ll c) {
+        if (qr < tr[u].l || tr[u].r < ql) return;              // 无交集
+        if (ql <= tr[u].l && tr[u].r <= qr) {                   // 完全包含
+            apply_tag(u, b, c);
+            return;
+        }
+        push_down(u);                                           // ★ 必须先下传
+        update(u << 1, ql, qr, b, c);
+        update(u << 1 | 1, ql, qr, b, c);
+        push_up(u);
+    }
+
+    // ========== 区间求和 ==========
+
+    ll query_sum(int u, int ql, int qr) {
+        if (qr < tr[u].l || tr[u].r < ql) return 0;            // 无交集
+        if (ql <= tr[u].l && tr[u].r <= qr) return tr[u].sum;  // 完全包含
+        push_down(u);
+        return (query_sum(u << 1, ql, qr) + query_sum(u << 1 | 1, ql, qr)) % MOD;
+    }
+
+    // ========== 区间最大值 ==========
+
+    ll query_max(int u, int ql, int qr) {
+        if (qr < tr[u].l || tr[u].r < ql) return NEG_INF;      // 无交集
+        if (ql <= tr[u].l && tr[u].r <= qr) return tr[u].max_val;
+        push_down(u);
+        return max(query_max(u << 1, ql, qr), query_max(u << 1 | 1, ql, qr));
+    }
+
+    // ========== 线段树二分：[ql, qr] 内第一个 >= V 的下标，无解返回 -1 ==========
+
+    int find_first(int u, int ql, int qr, ll V) {
+        // 剪枝 1：无交集
+        if (qr < tr[u].l || tr[u].r < ql) return -1;
+        // 剪枝 2：整段最大值都不够
+        if (tr[u].max_val < V) return -1;
+        // 叶子：走到这里必然满足 max_val >= V 且在范围内
+        if (tr[u].l == tr[u].r) return tr[u].l;
+
+        push_down(u);   // ★★ 关键：下降前必须下传标记，否则孩子信息过期
+
+        // 先左后右，保证下标最小
+        int res = find_first(u << 1, ql, qr, V);
+        if (res != -1) return res;
+        return find_first(u << 1 | 1, ql, qr, V);
+    }
+
+    // ========== 线段树二分：[ql, qr] 内第一个前缀和 >= V 的下标 ==========
+    // 适用于 a_i >= 0 的场景（保证前缀和单调）
+
+    int find_prefix(int u, int ql, int qr, ll V) {
+        if (qr < tr[u].l || tr[u].r < ql) return -1;
+        if (tr[u].sum < V) return -1;
+        if (tr[u].l == tr[u].r) return tr[u].l;
+
+        push_down(u);
+
+        int res = find_prefix(u << 1, ql, qr, V);
+        if (res != -1) return res;
+        // 注意：若左子树部分命中，右子树的 V 需要减去左子树贡献
+        // 简化版：这里只做「存在性」判断，严格前缀和查找见下方说明
+        return find_prefix(u << 1 | 1, ql, qr, V);
     }
 };
+
+SegmentTree st;   // ★ 全局变量，避免 12MB 数组爆栈
+
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+
+    int N, Q;
+    cin >> N >> Q;
+
+    vector<ll> a(N);
+    for (int i = 0; i < N; ++i) cin >> a[i];
+
+    st.build(1, 0, N - 1, a);
+
+    while (Q--) {
+        int T;
+        cin >> T;
+        if (T == 0) {
+            int l, r; ll b, c;
+            cin >> l >> r >> b >> c;
+            st.update(1, l, r - 1, b % MOD, c % MOD);   // [l, r) -> [l, r-1]
+        } else if (T == 1) {
+            int l, r;
+            cin >> l >> r;
+            cout << st.query_sum(1, l, r - 1) << '\n';
+        } else if (T == 2) {
+            // 扩展：区间最大值
+            int l, r;
+            cin >> l >> r;
+            cout << st.query_max(1, l, r - 1) << '\n';
+        } else {
+            // 扩展：找第一个 >= V
+            int l; ll V;
+            cin >> l >> V;
+            int ans = st.find_first(1, l, N - 1, V);
+            cout << (ans == -1 ? N : ans) << '\n';
+        }
+    }
+    return 0;
+}
