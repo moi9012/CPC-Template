@@ -237,3 +237,13 @@ int main() {
  *   6. 「强制 A 为真」            → add_clause(A, true, A, true)
  * ========================================================================
  */
+ 
+ /*
+ * ============================================================================================
+ * File Description: C++ Template for Competitive Programming (CPC)
+ * Template Source: https://github.com/moi9012/CPC-Template
+ * Compiler Version: C++17 / C++20
+ * Author Notes: Includes common headers, macros, fast I/O, and frequently used data structures.
+ *               Suitable for platforms like Codeforces and CodeChef.
+ * ============================================================================================
+ */

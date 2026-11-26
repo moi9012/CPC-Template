@@ -138,3 +138,13 @@ int main() {
 
     return 0;
 }
+
+/*
+ * ============================================================================================
+ * File Description: C++ Template for Competitive Programming (CPC)
+ * Template Source: https://github.com/moi9012/CPC-Template
+ * Compiler Version: C++17 / C++20
+ * Author Notes: Includes common headers, macros, fast I/O, and frequently used data structures.
+ *               Suitable for platforms like Codeforces and CodeChef.
+ * ============================================================================================
+ */

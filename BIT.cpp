@@ -49,3 +49,13 @@ struct BIT {
     // 区间查询：求 [l, r] 的和（利用前缀和差分）
     ll query(int l, int r) { return query(r) - query(l - 1); }
 };
+
+/*
+ * ============================================================================================
+ * File Description: C++ Template for Competitive Programming (CPC)
+ * Template Source: https://github.com/moi9012/CPC-Template
+ * Compiler Version: C++17 / C++20
+ * Author Notes: Includes common headers, macros, fast I/O, and frequently used data structures.
+ *               Suitable for platforms like Codeforces and CodeChef.
+ * ============================================================================================
+ */
