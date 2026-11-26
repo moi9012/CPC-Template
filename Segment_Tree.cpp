@@ -1,49 +1,113 @@
 struct SegmentTree {
     struct Node {
-        int l, r;
-        ll sum, add;
-    } tr[400005];
+        int l, r;       // 当前节点覆盖的区间 [l, r]
+        ll sum;         // 区间 [l, r] 的元素和
+        ll add;         // 懒标记：表示当前节点区间内每个元素需要加上的值（尚未下传给子节点）
+    } tr[400005];       // 线段树节点数组，大小通常开 4 倍 n
 
+    /*
+     * ================== 向上更新（push_up） ==================
+     * 【核心思想】
+     * 当子节点的信息被修改后，向上回溯更新父节点的信息。
+     * 父节点的区间和 = 左子节点区间和 + 右子节点区间和。
+     * 
+     * 【调用时机】
+     * 1. build 时自底向上构建线段树。
+     * 2. update 修改完子节点后，回溯更新父节点。
+     * ==========================================================
+     */
     void push_up(int u) {
         tr[u].sum = tr[u << 1].sum + tr[u << 1 | 1].sum;
     }
+
+    /*
+     * ================== 下传懒标记（push_down） ==================
+     * 【核心思想】
+     * 懒标记的核心是"延迟更新"：当对区间 [l, r] 执行区间加 c 时，
+     * 只修改当前节点的 sum 和 add，而不立即递归修改所有子节点。
+     * 当后续查询或修改需要访问子节点时，才将 add 的值下传给左右子节点。
+     * 
+     * 【下传逻辑】
+     * 1. 左子节点 sum += add * 左子节点区间长度，左子节点 add += 当前 add
+     * 2. 右子节点 sum += add * 右子节点区间长度，右子节点 add += 当前 add
+     * 3. 当前节点 add 清零
+     * 
+     * 【调用时机】
+     * 在 update 和 query 中，当需要递归访问子节点前，必须先 push_down。
+     * ============================================================
+     */
     void push_down(int u) {
-        if (tr[u].add) {
+        if (tr[u].add) { // 只有存在懒标记时才需要下传
             auto &L = tr[u << 1], &R = tr[u << 1 | 1];
+            // 左子节点更新：区间和加上 add * 区间长度，懒标记累加
             L.sum += tr[u].add * (L.r - L.l + 1);
             L.add += tr[u].add;
+            // 右子节点更新
             R.sum += tr[u].add * (R.r - R.l + 1);
             R.add += tr[u].add;
+            // 当前节点懒标记清零
             tr[u].add = 0;
         }
     }
+
+    /*
+     * ================== 建树（build） ==================
+     * 【核心思想】
+     * 递归构建线段树，叶子节点对应原数组的单个元素，
+     * 非叶子节点的 sum 由子节点 push_up 得到。
+     * 
+     * 【时间复杂度】O(n)
+     * ================================================
+     */
     void build(int u, int l, int r, vector<ll> &a) {
-        tr[u] = {l, r, a[l], 0};
-        if (l == r) return;
+        tr[u] = {l, r, a[l], 0}; // 初始化节点：区间 [l,r]，和为 a[l]，懒标记为 0
+        if (l == r) return;      // 叶子节点，递归终止
         int mid = (l + r) >> 1;
-        build(u << 1, l, mid, a);
-        build(u << 1 | 1, mid + 1, r, a);
-        push_up(u);
+        build(u << 1, l, mid, a);       // 递归构建左子树
+        build(u << 1 | 1, mid + 1, r, a); // 递归构建右子树
+        push_up(u); // 回溯更新父节点
     }
+
+    /*
+     * ================== 区间修改（update） ==================
+     * 【核心思想】
+     * 对区间 [l, r] 内的每个元素加上 c。
+     * 1. 如果当前节点区间完全包含在 [l, r] 内，直接修改当前节点的 sum 和 add，返回。
+     * 2. 否则，先 push_down 下传懒标记，再递归修改左右子节点，最后 push_up 更新父节点。
+     * 
+     * 【时间复杂度】O(log n)
+     * ======================================================
+     */
     void update(int u, int l, int r, ll c) {
-        if (tr[u].l >= l && tr[u].r <= r) {
-            tr[u].sum += c * (tr[u].r - tr[u].l + 1);
-            tr[u].add += c;
+        if (tr[u].l >= l && tr[u].r <= r) { // 当前节点区间完全在修改区间内
+            tr[u].sum += c * (tr[u].r - tr[u].l + 1); // 区间和加上 c * 区间长度
+            tr[u].add += c; // 懒标记累加
             return;
         }
-        push_down(u);
+        push_down(u); // 下传懒标记，保证子节点信息正确
         int mid = (tr[u].l + tr[u].r) >> 1;
-        if (l <= mid) update(u << 1, l, r, c);
-        if (r > mid) update(u << 1 | 1, l, r, c);
-        push_up(u);
+        if (l <= mid) update(u << 1, l, r, c);       // 修改区间与左子树有交集
+        if (r > mid) update(u << 1 | 1, l, r, c);    // 修改区间与右子树有交集
+        push_up(u); // 回溯更新父节点
     }
+
+    /*
+     * ================== 区间查询（query） ==================
+     * 【核心思想】
+     * 查询区间 [l, r] 的元素和。
+     * 1. 如果当前节点区间完全包含在 [l, r] 内，直接返回 sum。
+     * 2. 否则，先 push_down 下传懒标记，再递归查询左右子节点，累加结果。
+     * 
+     * 【时间复杂度】O(log n)
+     * ======================================================
+     */
     ll query(int u, int l, int r) {
-        if (tr[u].l >= l && tr[u].r <= r) return tr[u].sum;
-        push_down(u);
+        if (tr[u].l >= l && tr[u].r <= r) return tr[u].sum; // 完全包含，直接返回
+        push_down(u); // 下传懒标记，保证子节点信息正确
         int mid = (tr[u].l + tr[u].r) >> 1;
         ll res = 0;
-        if (l <= mid) res += query(u << 1, l, r);
-        if (r > mid) res += query(u << 1 | 1, l, r);
+        if (l <= mid) res += query(u << 1, l, r);       // 查询区间与左子树有交集
+        if (r > mid) res += query(u << 1 | 1, l, r);    // 查询区间与右子树有交集
         return res;
     }
 };
