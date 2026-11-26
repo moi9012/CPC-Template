@@ -15,8 +15,9 @@ using namespace std;
  * 【适用】静态/在线合并、只问连通性或集合大小，无需撤销。
  */
 struct DSU {
+	int n;
     vector<int> fa, sz;
-    int n;
+    
     int components; // 当前连通块数量，方便统计
 
     DSU(int _n) : n(_n), fa(_n), sz(_n, 1), components(_n) {
